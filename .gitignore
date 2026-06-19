@@ -102,3 +102,5 @@ alert_state.json
 # Local report dumps and log logs
 *.log
 match_reports_*.txt
+
+.idea/
