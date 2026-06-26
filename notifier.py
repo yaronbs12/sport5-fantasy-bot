@@ -193,18 +193,24 @@ def build_match_report(
     ]
 
     if starters_by_member:
-        for m_name, players in starters_by_member.items():
+        starter_items = list(starters_by_member.items())
+        for i, (m_name, players) in enumerate(starter_items):
             labels = ", ".join(_label_with_nation(p) for p in players)
             raw_lines.append(f"• {m_name}: {labels}")
+            if i < len(starter_items) - 1:
+                raw_lines.append("")
     else:
         raw_lines.append("• אין שחקנים למשחק זה")
 
     raw_lines.extend(["", "🛑 שחקנים שלכם שמחכים על הספסל:"])
 
     if bench_by_member:
-        for m_name, players in bench_by_member.items():
+        bench_items = list(bench_by_member.items())
+        for i, (m_name, players) in enumerate(bench_items):
             labels = ", ".join(_label_with_nation(p) for p in players)
             raw_lines.append(f"• {m_name}: {labels}")
+            if i < len(bench_items) - 1:
+                raw_lines.append("")
     else:
         raw_lines.append("• אין שחקנים למשחק זה")
 
