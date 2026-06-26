@@ -645,6 +645,22 @@ def main():
             display: none !important;
         }}
 
+        /* Hide Streamlit top bar, main menu, and watermark footer */
+        #MainMenu {{
+            visibility: hidden !important;
+            display: none !important;
+        }}
+        footer {{
+            visibility: hidden !important;
+            display: none !important;
+        }}
+        [data-testid="stToolbar"] {{
+            display: none !important;
+        }}
+        [data-testid="stDecoration"] {{
+            display: none !important;
+        }}
+
         /* Hide heading anchor links next to titles */
         a.header-anchor {{
             display: none !important;

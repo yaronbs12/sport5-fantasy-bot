@@ -90,7 +90,6 @@ venv.bak/
 
 # Streamlit config and secrets
 .streamlit/secrets.toml
-.streamlit/config.toml
 
 # Sport5 User Session & Debug Data
 sport5_user_data/
