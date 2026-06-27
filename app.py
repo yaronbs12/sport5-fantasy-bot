@@ -1,6 +1,7 @@
 import streamlit as st
 import json
 import sys
+import html
 import os
 import time
 import requests
@@ -1160,45 +1161,15 @@ def main():
                 
                 st.markdown('<div class="fantasy-card" style="direction: rtl; text-align: right; color: var(--text-color);">\n\n' + report_markdown + '\n\n</div>', unsafe_allow_html=True)
                 
-                escaped_report = json.dumps(report_markdown)
+                escaped_textarea_content = html.escape(report_markdown)
                 encoded_report = urllib.parse.quote(report_markdown)
                 whatsapp_url = f"https://api.whatsapp.com/send?text={encoded_report}"
                 
-                action_buttons_html = f"""<div style="display: flex; gap: 12px; width: 100%; direction: rtl;">
+                action_buttons_html = f"""<textarea id="report-text-{i}" style="display:none;">{escaped_textarea_content}</textarea>
+<div style="display: flex; gap: 12px; width: 100%; direction: rtl;">
 <a href="{whatsapp_url}" target="_blank" style="flex: 1; height: 42px; background-color: #25D366; color: white; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.25); font-size: 14.5px; font-family: 'Rubik', sans-serif;">💬 שתף בוואטסאפ</a>
-<button onclick="window.copyText_{i}(this)" style="flex: 1; height: 42px; background-color: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif;">📋 העתק דוח ללוח</button>
-</div>
-<script>
-window.copyText_{i} = function(btn) {{
-    const text = {escaped_report};
-    const orig = btn.innerHTML;
-    function success() {{
-        btn.innerHTML = '<span>✓</span> הועתק!';
-        btn.style.backgroundColor = '#10b981';
-        setTimeout(() => {{ btn.innerHTML = orig; btn.style.backgroundColor = '#ef4444'; }}, 2000);
-    }}
-    function fallback() {{
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.top = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        try {{
-            if (document.execCommand('copy')) success();
-            else window.prompt('העתק את הדוח:', text);
-        }} catch(e) {{
-            window.prompt('העתק את הדוח:', text);
-        }}
-        document.body.removeChild(ta);
-    }}
-    if (navigator.clipboard && navigator.clipboard.writeText) {{
-        navigator.clipboard.writeText(text).then(success).catch(fallback);
-    }} else {{
-        fallback();
-    }}
-}};
-</script>"""
+<button onclick="(function(btn){{var txt=document.getElementById('report-text-{i}').value;var orig=btn.innerHTML;function ok(){{btn.innerHTML='<span>✓</span> הועתק!';btn.style.backgroundColor='#10b981';setTimeout(function(){{btn.innerHTML=orig;btn.style.backgroundColor='#ef4444';}},2000);}}function err(){{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.top='-9999px';document.body.appendChild(ta);ta.select();try{{if(document.execCommand('copy'))ok();else window.prompt('העתק את הדוח:',txt);}}catch(e){{window.prompt('העתק את הדוח:',txt);}}document.body.removeChild(ta);}}if(navigator.clipboard&&navigator.clipboard.writeText){{navigator.clipboard.writeText(txt).then(ok).catch(err);}}else{{err();}}}})(this)" style="flex: 1; height: 42px; background-color: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif;">📋 העתק דוח ללוח</button>
+</div>"""
                 st.html(action_buttons_html)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
