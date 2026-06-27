@@ -1174,7 +1174,7 @@ def main():
                 # Player Name Sanitization: Replace backticks globally with standard apostrophes
                 report_markdown = raw_report.replace('`', "'")
                 
-                st.markdown(f'<div class="fantasy-card" style="direction: rtl; text-align: right; color: var(--text-color);">\n\n{report_markdown}\n\n</div>', unsafe_allow_html=True)
+                st.markdown('<div class="fantasy-card" style="direction: rtl; text-align: right; color: var(--text-color);">\n\n' + report_markdown + '\n\n</div>', unsafe_allow_html=True)
                 
                 escaped_report = json.dumps(report_markdown)
                 encoded_report = urllib.parse.quote(report_markdown)
