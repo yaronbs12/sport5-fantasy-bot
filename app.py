@@ -1166,13 +1166,11 @@ def main():
                 
                 action_buttons_html = f"""<div style="display: flex; gap: 12px; width: 100%; direction: rtl;">
 <a href="{whatsapp_url}" target="_blank" style="flex: 1; height: 42px; background-color: #25D366; color: white; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.25); font-size: 14.5px; font-family: 'Rubik', sans-serif;">💬 שתף בוואטסאפ</a>
-<button id="copy-btn-{i}" style="flex: 1; height: 42px; background-color: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif;">📋 העתק דוח ללוח</button>
+<button onclick="window.copyText_{i}(this)" style="flex: 1; height: 42px; background-color: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif;">📋 העתק דוח ללוח</button>
 </div>
 <script>
-(function() {{
+window.copyText_{i} = function(btn) {{
     const text = {escaped_report};
-    const btn = document.getElementById('copy-btn-{i}');
-    if (!btn) return;
     const orig = btn.innerHTML;
     function success() {{
         btn.innerHTML = '<span>✓</span> הועתק!';
@@ -1188,20 +1186,18 @@ def main():
         ta.select();
         try {{
             if (document.execCommand('copy')) success();
-            else window.prompt('העתק את הדוח (לחץ Ctrl+C):', text);
+            else window.prompt('העתק את הדוח:', text);
         }} catch(e) {{
-            window.prompt('העתק את הדוח (לחץ Ctrl+C):', text);
+            window.prompt('העתק את הדוח:', text);
         }}
         document.body.removeChild(ta);
     }}
-    btn.addEventListener('click', () => {{
-        if (navigator.clipboard && navigator.clipboard.writeText) {{
-            navigator.clipboard.writeText(text).then(success).catch(fallback);
-        }} else {{
-            fallback();
-        }}
-    }});
-}})();
+    if (navigator.clipboard && navigator.clipboard.writeText) {{
+        navigator.clipboard.writeText(text).then(success).catch(fallback);
+    }} else {{
+        fallback();
+    }}
+}};
 </script>"""
                 st.html(action_buttons_html)
                 

@@ -127,6 +127,8 @@ TEAM_NAME_MAP = {
     "Ivory Coast":          "חוף השנהב",
     "Mali":                 "מאלי",
     "Congo DR":             "הרפובליקה הדמוקרטית של קונגו",
+    "DR Congo":             "הרפובליקה הדמוקרטית של קונגו",
+    "Algeria":              "אלג'יריה",
     "Angola":               "אנגולה",
     "Tanzania":             "טנזניה",
 }
@@ -224,6 +226,17 @@ def fetch_live_schedule(only_future: bool = True) -> list[dict]:
         il_kickoff = _to_il(utc_kickoff)
 
         # Translate to canonical Hebrew names (must match Sport5 / normalize_country_name output)
+        def is_placeholder(name: str) -> bool:
+            return bool(
+                re.match(r"^[WL]\d+$", name) or
+                re.match(r"^\d[A-L](?:/[A-L])*$", name)
+            )
+
+        if team1_en not in TEAM_NAME_MAP and not is_placeholder(team1_en):
+            logger.warning("Country '%s' is missing translation mapping in TEAM_NAME_MAP!", team1_en)
+        if team2_en not in TEAM_NAME_MAP and not is_placeholder(team2_en):
+            logger.warning("Country '%s' is missing translation mapping in TEAM_NAME_MAP!", team2_en)
+
         home_heb = TEAM_NAME_MAP.get(team1_en, team1_en)
         away_heb = TEAM_NAME_MAP.get(team2_en, team2_en)
 
