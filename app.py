@@ -1164,14 +1164,11 @@ def main():
                 encoded_report = urllib.parse.quote(report_markdown)
                 whatsapp_url = f"https://api.whatsapp.com/send?text={encoded_report}"
                 
-                action_buttons_html = f"""<div style="display: flex; gap: 12px; width: 100%; direction: rtl; margin-top: 10px;">
-    <div style="flex: 1; height: 42px; background-color: #ef4444; color: white; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif; user-select: none;" title="השתמש בתיבת הגיבוי למטה להעתקה">📋 העתק דוח ללוח</div>
-    <a href="{whatsapp_url}" target="_blank" style="flex: 1; height: 42px; background-color: #25D366; color: white; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.25); font-size: 14.5px; font-family: 'Rubik', sans-serif;">💬 שתף בוואטסאפ</a>
-</div>"""
+                action_buttons_html = f"""<a href="{whatsapp_url}" target="_blank" style="width: 100%; height: 42px; background-color: #25D366; color: white; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.25); font-size: 14.5px; font-family: 'Rubik', sans-serif; margin-top: 10px;">💬 שתף בוואטסאפ</a>"""
                 st.markdown(action_buttons_html, unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
-                with st.expander("📋 הצג טקסט גולמי (לגיבוי)"):
+                with st.expander("📄 הצג טקסט גולמי להעתקה"):
                     st.code(report_markdown, language="markdown")
 
     # -------------------------------------------------------------
