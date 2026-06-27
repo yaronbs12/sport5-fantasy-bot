@@ -918,7 +918,7 @@ def main():
                     st.markdown(f"<div style='text-align: right; direction: rtl; color: var(--muted-text);'>מחזור: <b>{active_round_id}</b></div>", unsafe_allow_html=True)
                     
                 max_matches_in_round = len(filtered_schedule)
-                st.markdown(f"<div style='text-align: right; margin-bottom: 15px; direction: rtl; color: var(--text-color);'>סה״כ משחקים במחזור זה: <b>{max_matches_in_round}</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align: right; margin-bottom: 15px; direction: rtl; color: var(--text-color);'>משחקים שנותרו למחזור זה: <b>{max_matches_in_round}</b></div>", unsafe_allow_html=True)
                 
                 if max_matches_in_round > 0:
                     n_input = st.slider(
