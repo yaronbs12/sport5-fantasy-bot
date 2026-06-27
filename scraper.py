@@ -35,6 +35,13 @@ from config import USER_DATA_DIR, SEASON_ID, LEAGUE_ID, DEBUG, BASE_URL, IL_TZ
 logger = logging.getLogger(__name__)
 
 
+def _to_int(v) -> int | None:
+    try:
+        return int(v) if v is not None else None
+    except (ValueError, TypeError):
+        return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Playwright context factory
 #  headless=False → bypasses Sport5 anti-bot WAF
@@ -239,6 +246,9 @@ def fetch_league_users(context: BrowserContext, league_id: str) -> list[dict]:
                 })
 
     logger.debug("Found %d league members for league %s.", len(members), league_id)
+    MOCK_MAP = {"ירוניני": "יוסי כהן", "רון מוריניו": "דני לוי", "Ofriki": "רון אבידן", "עילם": "שירה מזרחי", "גיל שקולנאי": "עמית שלום"}
+    for m in members:
+        m["user_name"] = MOCK_MAP.get(m["user_name"], m["user_name"])
     return members
 
 
@@ -271,13 +281,6 @@ def fetch_structured_squad(
 
     user_team      = data.get("data", {}).get("userTeam", {})
     players_raw    = user_team.get("userTeamPlayers", [])
-
-    # Normalize IDs to int to avoid int/str type-mismatch false negatives
-    def _to_int(v) -> int | None:
-        try:
-            return int(v) if v is not None else None
-        except (ValueError, TypeError):
-            return None
 
     captain_id     = _to_int(user_team.get("captainId"))
     sub_captain_id = _to_int(user_team.get("subCaptainId"))
@@ -682,6 +685,8 @@ def filter_matches_by_date(
                 datetime.fromisoformat(str(kickoff))
                 if isinstance(kickoff, str) else kickoff
             )
+            if kickoff_dt.tzinfo is None:
+                kickoff_dt = kickoff_dt.replace(tzinfo=IL_TZ)
             if start_dt <= kickoff_dt <= end_dt:
                 filtered.append(m)
         except Exception:
