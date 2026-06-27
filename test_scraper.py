@@ -1,6 +1,9 @@
 import pytest
 from datetime import datetime
-from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    from backports.zoneinfo import ZoneInfo
 from scraper import (
     normalize_country_name,
     sanitize_player_name,

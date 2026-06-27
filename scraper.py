@@ -25,11 +25,14 @@ Validated endpoints:
 """
 
 import json
+import logging
 import os
 from datetime import datetime
 from playwright.sync_api import BrowserContext
 
-from config import USER_DATA_DIR, SEASON_ID, LEAGUE_ID, DEBUG
+from config import USER_DATA_DIR, SEASON_ID, LEAGUE_ID, DEBUG, BASE_URL, IL_TZ
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,16 +76,18 @@ def _get_json(context: BrowserContext, url: str) -> dict | list | None:
     try:
         response = context.request.get(url)
         if response.status != 200:
-            print(f"  [scraper] HTTP {response.status} <- {url}")
+            logger.warning("HTTP %s <- %s", response.status, url)
             return None
         return response.json()
     except ValueError:
-        print(f"  [scraper] ERROR: got HTML instead of JSON <- {url}")
-        print("            → Session expired? Delete sport5_user_data/ and re-run.")
-        print("            → WAF block? Ensure headless=False is used.")
+        logger.error(
+            "Got HTML instead of JSON from %s — session expired or WAF block.\n"
+            "  → Delete sport5_user_data/ and re-run, or ensure headless=False.",
+            url,
+        )
         return None
     except Exception as exc:
-        print(f"  [scraper] Network error: {exc}")
+        logger.error("Network error fetching %s: %s", url, exc)
         return None
 
 
@@ -100,11 +105,11 @@ def fetch_leagues_summary(context: BrowserContext) -> list[dict]:
     Saves raw API response to leagues_debug.json for inspection.
     Returns [] on any failure so callers fall back to manual ID entry.
     """
-    url = f"https://dreamteam.sport5.co.il/api/CustomLeagues/GetLeaguesSummary?seasonId={SEASON_ID}"
+    url = f"{BASE_URL}/api/CustomLeagues/GetLeaguesSummary?seasonId={SEASON_ID}"
     raw = _get_json(context, url)
 
     if raw is None:
-        print("  [scraper] GetLeaguesSummary: no response (HTML/error). Check session.")
+        logger.warning("GetLeaguesSummary: no response (HTML/error). Check session.")
         return []
 
     # ── Save raw response so the user can inspect the real field names ────────
@@ -126,62 +131,74 @@ def fetch_leagues_summary(context: BrowserContext) -> list[dict]:
                 []
             )
 
-    print(f"  [scraper] GetLeaguesSummary: {len(leagues)} leagues found.")
+    logger.debug("GetLeaguesSummary: %d leagues found.", len(leagues))
 
-    # ── Print first 10 names so the user can see what the API returned ────────
     if leagues:
-        print("  [scraper] First 10 league names from API:")
         for lg in leagues[:10]:
             name = lg.get("leagueName") or lg.get("name") or repr(lg)
             lid  = lg.get("id") or lg.get("leagueId") or "?"
-            print(f"    ID={lid}  name={name!r}")
+            logger.debug("  League ID=%s  name=%r", lid, name)
     else:
-        print("  [scraper] Response keys (top-level):", list(raw.keys()) if isinstance(raw, dict) else type(raw))
+        logger.debug("Response keys: %s", list(raw.keys()) if isinstance(raw, dict) else type(raw))
 
     return leagues
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Endpoint #1 — Nations / Teams mapping
+#  Endpoint #1 — Nations / Teams mapping + active round dates
+#  Single API call shared by get_teams_mapping() and fetch_active_round_dates()
 # ─────────────────────────────────────────────────────────────────────────────
+
+def fetch_teams_and_round_dates(
+    context: BrowserContext,
+) -> tuple[dict, tuple[str, str]]:
+    """
+    Single API call that returns both the team/nation mapping and the active
+    round date boundaries, avoiding a redundant second request to the same
+    endpoint.
+
+    Returns
+    -------
+    (teams_map, (start_date_str, end_date_str))
+    """
+    url  = f"{BASE_URL}/api/Leagues/Get?seasonId={SEASON_ID}"
+    data = _get_json(context, url)
+
+    teams_map: dict = {}
+    start, end = "", ""
+
+    if data and isinstance(data, dict):
+        d_val = data.get("data", {})
+        if isinstance(d_val, dict):
+            for team in d_val.get("teams", []):
+                t_id   = team.get("id")
+                t_name = (team.get("name") or "").strip()
+                if t_id and t_name:
+                    teams_map[t_id] = t_name
+            start = d_val.get("startDate", "") or ""
+            end   = d_val.get("endDate",   "") or ""
+
+    logger.debug("Loaded %d national team mappings.", len(teams_map))
+    _dump_once("sport5_teams_debug.json", {str(k): v for k, v in teams_map.items()})
+    return teams_map, (start, end)
+
 
 def get_teams_mapping(context: BrowserContext) -> dict:
     """
     Returns {team_id (int): team_name_hebrew (str)}.
-
-    URL : GET /api/Leagues/Get?seasonId=9
-    Path: data.teams[] → { id, name }
+    Thin wrapper around fetch_teams_and_round_dates().
     """
-    url  = f"https://dreamteam.sport5.co.il/api/Leagues/Get?seasonId={SEASON_ID}"
-    data = _get_json(context, url)
-    teams_map: dict = {}
-
-    if data and isinstance(data, dict):
-        for team in data.get("data", {}).get("teams", []):
-            t_id   = team.get("id")
-            t_name = (team.get("name") or "").strip()
-            if t_id and t_name:
-                teams_map[t_id] = t_name
-
-    print(f"  [scraper] Loaded {len(teams_map)} national team mappings.")
-    _dump_once("sport5_teams_debug.json", {str(k): v for k, v in teams_map.items()})
+    teams_map, _ = fetch_teams_and_round_dates(context)
     return teams_map
 
 
 def fetch_active_round_dates(context: BrowserContext) -> tuple[str, str]:
     """
     Returns (startDate, endDate) strings from Sport5 active round info.
+    Thin wrapper around fetch_teams_and_round_dates().
     """
-    url  = f"https://dreamteam.sport5.co.il/api/Leagues/Get?seasonId={SEASON_ID}"
-    data = _get_json(context, url)
-    if data and isinstance(data, dict):
-        d_val = data.get("data", {})
-        if isinstance(d_val, dict):
-            start = d_val.get("startDate")
-            end = d_val.get("endDate")
-            if start and end:
-                return start, end
-    return "", ""
+    _, dates = fetch_teams_and_round_dates(context)
+    return dates
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -198,7 +215,7 @@ def fetch_league_users(context: BrowserContext, league_id: str) -> list[dict]:
     Path: data.teams[] → { userId, userName, name }
     """
     url = (
-        f"https://dreamteam.sport5.co.il/api/CustomLeagues/GetLeagueData"
+        f"{BASE_URL}/api/CustomLeagues/GetLeagueData"
         f"?seasonId={SEASON_ID}"
         f"&leagueId={league_id}"
         f"&teamId=null"
@@ -221,7 +238,7 @@ def fetch_league_users(context: BrowserContext, league_id: str) -> list[dict]:
                     "team_name": team_name,
                 })
 
-    print(f"  [scraper] Found {len(members)} league members for league {league_id}.")
+    logger.debug("Found %d league members for league %s.", len(members), league_id)
     return members
 
 
@@ -243,7 +260,7 @@ def fetch_structured_squad(
     Path: data.userTeam.{userTeamPlayers[], captainId, subCaptainId}
     """
     url = (
-        f"https://dreamteam.sport5.co.il/api/UserTeam/GetUserAndTeam"
+        f"{BASE_URL}/api/UserTeam/GetUserAndTeam"
         f"?seasonId={SEASON_ID}&userId={user_id}"
     )
     squad = {"user_name": user_name, "team_name": team_name, "players": []}
@@ -284,7 +301,7 @@ def fetch_structured_squad(
 
         p_name     = sanitize_player_name((player_obj.get("name") or "").strip())
         t_id       = player_obj.get("teamId")
-        nation     = teams_map.get(t_id, f"Team_{t_id}")
+        nation     = normalize_country_name(teams_map.get(t_id, f"Team_{t_id}"))
         is_reserve = bool(p.get("isReserve", False))
 
         role = "player"
@@ -305,16 +322,15 @@ def fetch_structured_squad(
             "role":     role,
         })
 
-    # Debug: show captain resolution for this squad
-    captain_found  = next((p for p in squad["players"] if p["role"] == "captain"),     None)
-    vc_found       = next((p for p in squad["players"] if p["role"] == "sub_captain"), None)
-    cap_name  = captain_found["name"]  if captain_found else "NOT FOUND"
-    vc_name   = vc_found["name"]       if vc_found      else "NOT FOUND"
-    print(
-        f"    [cap] {user_name}: "
-        f"captainId={captain_id} → {cap_name} | "
-        f"subCaptainId={sub_captain_id} → {vc_name}"
-    )
+    if DEBUG:
+        captain_found = next((p for p in squad["players"] if p["role"] == "captain"),     None)
+        vc_found      = next((p for p in squad["players"] if p["role"] == "sub_captain"), None)
+        cap_name = captain_found["name"] if captain_found else "NOT FOUND"
+        vc_name  = vc_found["name"]      if vc_found      else "NOT FOUND"
+        logger.debug(
+            "[cap] %s: captainId=%s → %s | subCaptainId=%s → %s",
+            user_name, captain_id, cap_name, sub_captain_id, vc_name,
+        )
 
     return squad
 
@@ -336,18 +352,18 @@ def fetch_all_squads(
         The league to fetch. Defaults to config.LEAGUE_ID but can be
         overridden at call time (used by the interactive CLI).
     """
-    print("  [scraper] Fetching team/nation mapping (endpoint #1)...")
+    logger.info("Fetching team/nation mapping (endpoint #1)...")
     teams_map = get_teams_mapping(context)
 
-    print(f"  [scraper] Fetching league members for {league_id} (endpoint #2)...")
+    logger.info("Fetching league members for %s (endpoint #2)...", league_id)
     members = fetch_league_users(context, league_id)
 
     if not members:
-        print("  [scraper] WARNING: no members found — check session & league ID.")
+        logger.warning("No members found for league %s — check session & league ID.", league_id)
         return []
 
     squads: list = []
-    print("  [scraper] Fetching individual rosters (endpoint #3)...")
+    logger.info("Fetching individual rosters (endpoint #3)...")
     for member in members:
         squad = fetch_structured_squad(
             context,
@@ -358,7 +374,7 @@ def fetch_all_squads(
         )
         starters = sum(1 for p in squad["players"] if not p["is_bench"])
         benched  = sum(1 for p in squad["players"] if p["is_bench"])
-        print(f"    + {member['user_name']} — {starters} starters, {benched} bench")
+        logger.debug("  + %s — %d starters, %d bench", member["user_name"], starters, benched)
         squads.append(squad)
 
     return squads
@@ -377,7 +393,7 @@ def _dump_once(filename: str, data) -> None:
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-            print(f"  [scraper] Saved dump -> {path}")
+            logger.debug("Saved dump → %s", path)
         except Exception:
             pass
 
@@ -390,7 +406,7 @@ def _dump_always(filename: str, data) -> None:
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        print(f"  [scraper] Debug dump -> {path}")
+        logger.debug("Debug dump → %s", path)
     except Exception:
         pass
 
@@ -637,48 +653,38 @@ def sanitize_player_name(name: str) -> str:
     return name.replace("`", "'")
 
 
-def filter_matches_by_date(schedule: list[dict], start_date_str: str, end_date_str: str) -> list[dict]:
-    """Filter upcoming matches strictly using the active round's start and end date boundaries."""
-    if not schedule:
-        return []
-    if not start_date_str or not end_date_str:
-        return schedule
-        
+def filter_matches_by_date(
+    schedule: list[dict],
+    start:    datetime | str,
+    end:      datetime | str,
+) -> list[dict]:
+    """Filter matches to those with kickoff_time within [start, end] (inclusive)."""
+    if not schedule or not start or not end:
+        return schedule or []
+
     try:
-        from zoneinfo import ZoneInfo
-    except ImportError:
-        from backports.zoneinfo import ZoneInfo
-        
-    IL_TZ = ZoneInfo("Asia/Jerusalem")
-    
-    try:
-        start_dt = datetime.fromisoformat(start_date_str).replace(tzinfo=IL_TZ)
-        end_dt = datetime.fromisoformat(end_date_str).replace(tzinfo=IL_TZ)
+        start_dt = datetime.fromisoformat(start) if isinstance(start, str) else start
+        end_dt   = datetime.fromisoformat(end)   if isinstance(end,   str) else end
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=IL_TZ)
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=IL_TZ)
     except Exception:
-        try:
-            start_dt = start_date_str.replace(tzinfo=IL_TZ) if hasattr(start_date_str, "replace") else start_date_str
-            end_dt = end_date_str.replace(tzinfo=IL_TZ) if hasattr(end_date_str, "replace") else end_date_str
-        except Exception:
-            return schedule
+        return schedule
 
     filtered = []
     for m in schedule:
         kickoff = m.get("kickoff_time")
         if not kickoff:
             continue
-            
-        if isinstance(kickoff, str):
-            try:
-                kickoff_dt = datetime.fromisoformat(kickoff).replace(tzinfo=IL_TZ)
-            except Exception:
-                continue
-        else:
-            kickoff_dt = kickoff
-            
         try:
+            kickoff_dt = (
+                datetime.fromisoformat(str(kickoff))
+                if isinstance(kickoff, str) else kickoff
+            )
             if start_dt <= kickoff_dt <= end_dt:
                 filtered.append(m)
         except Exception:
-            filtered.append(m)
-            
+            pass  # skip matches with unparseable kickoff times
+
     return filtered

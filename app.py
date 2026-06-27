@@ -6,15 +6,16 @@ import time
 import requests
 import urllib.parse
 import base64
+import shutil
+import subprocess
+import logging
 from datetime import datetime
+from collections import Counter
 from playwright.sync_api import sync_playwright
 
-# Setup paths
-sys.path.insert(0, os.getcwd())
-
-from config import SEASON_ID, USER_DATA_DIR
-from display import format_bidi
-from login import ensure_authenticated
+from config import SEASON_ID, USER_DATA_DIR, LEAGUE_BLACKLIST, IL_TZ, BASE_URL
+from display import format_bidi, normalize_league_name
+from login import ensure_authenticated, is_authenticated
 from schedule_fetcher import fetch_live_schedule
 from scraper import (
     create_browser_context,
@@ -27,6 +28,9 @@ from scraper import (
     filter_matches_by_date
 )
 from notifier import build_match_report
+
+logger = logging.getLogger(__name__)
+
 
 # Page configuration
 st.set_page_config(
@@ -56,21 +60,12 @@ def save_league_id(league_id: str):
     except Exception:
         pass
 
-# Normalization helper (keeps league name string normalized for matching)
-def normalize_league_name(s: str) -> str:
-    if not s:
-        return ""
-    s = "".join(s.split())
-    for char in ('"', "'", '״', '׳', '’'):
-        s = s.replace(char, '')
-    return s.lower()
-
 @st.cache_data(ttl=86400)
 def get_logo_base64() -> str:
     """Fetch the Sport5 logo and encode it to Base64 to bypass client hotlink blocks."""
     try:
         r = requests.get(
-            "https://dreamteam.sport5.co.il/assets/images/sport-5-logo.png",
+            f"{BASE_URL}/assets/images/sport-5-logo.png",
             headers={"User-Agent": "Mozilla/5.0"},
             timeout=5
         )
@@ -79,7 +74,7 @@ def get_logo_base64() -> str:
             return f"data:image/png;base64,{encoded}"
     except Exception:
         pass
-    return "https://dreamteam.sport5.co.il/assets/images/sport-5-logo.png"
+    return f"{BASE_URL}/assets/images/sport-5-logo.png"
 
 COUNTRY_TO_FLAG = {
     "גרמניה": "🇩🇪",
@@ -191,8 +186,7 @@ def fetch_metadata_cached():
         with sync_playwright() as pw:
             context = create_browser_context(pw)
             try:
-                from login import _is_authenticated
-                authed = _is_authenticated(context)
+                authed = is_authenticated(context)
                 if not authed:
                     raise PermissionError("Session is not authenticated.")
                 
@@ -221,8 +215,7 @@ def fetch_all_squads_cached(league_id: str):
         with sync_playwright() as pw:
             context = create_browser_context(pw)
             try:
-                from login import _is_authenticated
-                if not _is_authenticated(context):
+                if not is_authenticated(context):
                     raise PermissionError("Session is not authenticated.")
                 squads = fetch_all_squads(context, league_id=league_id)
                 if not squads:
@@ -254,8 +247,7 @@ def _check_session_alive() -> tuple[bool, str]:
         with sync_playwright() as pw:
             context = create_browser_context(pw)
             try:
-                from login import _is_authenticated
-                authed = _is_authenticated(context)
+                authed = is_authenticated(context)
             finally:
                 context.close()
         if authed:
@@ -270,7 +262,6 @@ def _check_session_alive() -> tuple[bool, str]:
 
 def _do_logout():
     """Fully clears session cookies, Streamlit cache, and all session_state."""
-    import shutil
     # 1. Delete Playwright session files
     if os.path.exists(USER_DATA_DIR):
         try:
@@ -290,7 +281,6 @@ def _show_login_ui(reason: str = ""):
     """
     Renders the full-page login prompt.
     """
-    import textwrap
 
     # ── Login card ────────────────────────────────────────────────────────
     st.markdown("""<div style="max-width: 520px; margin: 40px auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.35);">
@@ -342,7 +332,6 @@ def _show_login_ui(reason: str = ""):
                     if "executable" in exc_str or "playwright" in exc_str:
                         # Auto-install Playwright's chromium
                         try:
-                            import subprocess
                             subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
                             # Retry after auto-install
                             run_playwright_login()
@@ -868,8 +857,7 @@ def main():
                 )
                 if matched_lg:
                     resolved_league_name = matched_lg.get("leagueName") or matched_lg.get("name") or ""
-                    
-            LEAGUE_BLACKLIST = ["כף ורדה", "ליגת העל", "כללי", "הכללית", "עולמי"]
+
             if selected_league_id:
                 is_massive = False
                 if selected_league_id.lower() in ("0", "null", "none"):
@@ -906,9 +894,6 @@ def main():
                 m["away_team"] = normalize_country_name(m["away_team"])
             
             if schedule:
-                from zoneinfo import ZoneInfo
-                IL_TZ = ZoneInfo("Asia/Jerusalem")
-                
                 sport5_start, sport5_end = None, None
                 if st.session_state.active_round_dates:
                     s_str, e_str = st.session_state.active_round_dates
@@ -1034,7 +1019,6 @@ def main():
                 all_players.append(p["name"])
                 
         if all_players:
-            from collections import Counter
             counter = Counter(all_players)
             most_common = counter.most_common()
             if most_common:
@@ -1261,9 +1245,7 @@ function copyText_{i}() {{
                             st.error(f"שגיאה בתקשורת: {e}")
                     else:
                         st.warning("⚠️ מערכת הדיווח כרגע מנותקת עקב היעדר הגדרת Webhook (חסר BUG_WEBHOOK_URL ב-st.secrets).")
-                        # Local log for fallback gracefully
-                        print(f"Bug Report Fallback Log: Email={user_email}, Desc={bug_desc}")
-    
+                        logger.warning("Bug Report Webhook missing.")
     # ── Footer ──────────────────────────────────────────────────────────────────
     st.markdown("""
         <div style="text-align: center; padding: 28px 0 8px 0; border-top: 1px solid var(--border-color); margin-top: 10px;">

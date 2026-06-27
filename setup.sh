@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Exit immediately if a command exits with a non-zero status
 set -e
@@ -9,7 +9,7 @@ echo "==================================================="
 echo
 
 echo "[1/3] Installing Python dependencies from requirements.txt..."
-pip install -r requirements.txt
+python3 -m pip install -r requirements.txt
 
 echo
 echo "[2/3] Installing Playwright Chromium browser..."

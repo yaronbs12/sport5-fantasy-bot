@@ -70,3 +70,19 @@ def format_bidi(text: str) -> str:
             fixed_lines.append(line)   # English / digits / emoji → unchanged
 
     return "\n".join(fixed_lines)
+
+
+def normalize_league_name(s: str) -> str:
+    """
+    Normalizes a league name string for robust matching.
+    Strips all spaces and removes/replaces quotes, gershayim, and apostrophes.
+    """
+    if not s:
+        return ""
+    # Strip all whitespace characters
+    s = "".join(s.split())
+    # Remove variations of quotes, gershayim, and apostrophes
+    for char in ('"', "'", '״', '׳', '’'):
+        s = s.replace(char, '')
+    return s.lower()
+

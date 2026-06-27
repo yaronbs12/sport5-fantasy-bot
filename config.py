@@ -6,6 +6,7 @@ The match schedule is now fetched LIVE from openfootball (GitHub).
 """
 
 import os
+import logging
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -15,9 +16,13 @@ except ImportError:
 #  Playwright / Session
 # ─────────────────────────────────────────────────────────────────────────────
 USER_DATA_DIR = os.path.join(os.getcwd(), "sport5_user_data")
-LEAGUE_ID     = ""
-SEASON_ID     = 9
-DEBUG         = False
+SEASON_ID     = 9       # Sport5 Dream Team season identifier — World Cup 2026
+DEBUG         = os.environ.get("DEBUG", "false").lower() == "true"
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Sport5 API base URL  (single source of truth — do not repeat elsewhere)
+# ─────────────────────────────────────────────────────────────────────────────
+BASE_URL = "https://dreamteam.sport5.co.il"
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  Loop & timing
@@ -53,6 +58,33 @@ ALERT_OFFSETS = {
 # ─────────────────────────────────────────────────────────────────────────────
 MATCH_SCHEDULE: list = []
 FIRST_KICKOFF_PER_ROUND: dict = {}
+
+# Leagues blacklist to avoid pulling massive/global leagues which cause WAF blocks / timeouts
+LEAGUE_BLACKLIST = ["כף ורדה", "ליגת העל", "כללי", "הכללית", "עולמי"]
+
+
+# Runtime value — set via UI (Streamlit) or CLI prompt; never hard-code here.
+LEAGUE_ID: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Logging
+# ─────────────────────────────────────────────────────────────────────────────
+
+def setup_logging() -> None:
+    """
+    Configure logging for CLI (main.py) usage.
+    Streamlit manages its own logging — do NOT call this from app.py.
+    """
+    logging.basicConfig(
+        level=logging.DEBUG if DEBUG else logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+        handlers=[
+            logging.FileHandler(LOG_FILE, encoding="utf-8"),
+            logging.StreamHandler(),
+        ],
+    )
 
 
 def get_first_kickoff_per_round(schedule: list) -> dict:

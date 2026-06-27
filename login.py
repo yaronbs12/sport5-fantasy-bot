@@ -8,34 +8,34 @@ Fast path  : Opens a headless context and makes a test API call.
 
 Slow path  : Opens a VISIBLE Chromium window, navigates to Sport5, and
              calls page.wait_for_url("**/my-team", timeout=0) which blocks
-             INDEFINITELY until the user completes Google login and the
-             browser lands on the /my-team dashboard page.
+             INDEFINITELY until the user completes login and the browser
+             lands on the /my-team dashboard page.
              Only then are the session cookies flushed to disk and the
              headed context closed.
 """
 
 import sys
 import time
+import logging
 
 from playwright.sync_api import BrowserContext
 
-from config import USER_DATA_DIR, SEASON_ID
+from config import USER_DATA_DIR, SEASON_ID, BASE_URL
 
-# Sport5 home / login entry point
-_LOGIN_URL = "https://dreamteam.sport5.co.il"
+logger = logging.getLogger(__name__)
 
 # API endpoint used to verify the session is authenticated
-# (the same endpoint #1 used by the scraper)
-_AUTH_TEST_URL = (
-    f"https://dreamteam.sport5.co.il/api/Leagues/Get?seasonId={SEASON_ID}"
-)
+_AUTH_TEST_URL = f"{BASE_URL}/api/Leagues/Get?seasonId={SEASON_ID}"
+
+# Time (seconds) for Chromium to flush session cookies to disk after login
+_SESSION_FLUSH_SECONDS = 2
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Internal: test whether a context has a valid authenticated session
+#  Session validation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _is_authenticated(context: BrowserContext) -> bool:
+def is_authenticated(context: BrowserContext) -> bool:
     """
     Returns True when the context can successfully call the Sport5 API
     and receive a valid JSON response with data.
@@ -56,7 +56,7 @@ def _is_authenticated(context: BrowserContext) -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Public entry point called by main.py
+#  Public entry point called by main.py and app.py
 # ─────────────────────────────────────────────────────────────────────────────
 
 def ensure_authenticated(playwright_instance) -> None:
@@ -64,22 +64,21 @@ def ensure_authenticated(playwright_instance) -> None:
     Guarantees a valid Sport5 session exists in USER_DATA_DIR before
     the main monitoring loop starts.
 
-    Raises RuntimeError only if an unexpected error occurs (not on timeout,
-    since wait_for_url has timeout=0 i.e. waits forever).
+    Raises SystemExit if a headed browser cannot be opened.
     """
 
     # ── Fast path ────────────────────────────────────────────────────────────
-    print("[login] בודק אם הסשן קיים ותקף...")
+    logger.info("בודק אם הסשן קיים ותקף...")
     ctx = playwright_instance.chromium.launch_persistent_context(
         user_data_dir = USER_DATA_DIR,
         headless      = True,
         args          = ["--no-sandbox"],
     )
     try:
-        if _is_authenticated(ctx):
-            print("[login] ✅ הסשן תקין – ממשיך במצב headless.\n")
+        if is_authenticated(ctx):
+            logger.info("✅ הסשן תקין – ממשיך במצב headless.")
             return
-        print("[login] ⚠️  הסשן לא תקין – פותח דפדפן להתחברות...")
+        logger.warning("⚠️  הסשן לא תקין – פותח דפדפן להתחברות...")
     finally:
         ctx.close()          # must close before opening another context on same dir
 
@@ -87,30 +86,47 @@ def ensure_authenticated(playwright_instance) -> None:
     print()
     print("=" * 60)
     print("  🔐 נדרשת התחברות ל-Sport5")
-    print("  ייפתח חלון דפדפן — התחברו עם Google.")
+    print("  ייפתח חלון דפדפן — עליכם להתחבר עם אימייל וסיסמה בלבד!")
+    print("  ⚠️ שימו לב: התחברות באמצעות Google חסומה בדפדפנים אוטומטיים.")
     print("  הסקריפט יחכה עד שתגיעו לעמוד הקבוצה (/my-team).")
     print("=" * 60)
     print()
 
-    ctx  = playwright_instance.chromium.launch_persistent_context(
-        user_data_dir = USER_DATA_DIR,
-        headless      = False,
-        args          = ["--no-sandbox", "--start-maximized"],
-        no_viewport   = True,
-    )
-    page = ctx.new_page()
-    page.goto(_LOGIN_URL, wait_until="domcontentloaded")
+    try:
+        ctx  = playwright_instance.chromium.launch_persistent_context(
+            user_data_dir = USER_DATA_DIR,
+            headless      = False,
+            args          = ["--no-sandbox", "--start-maximized"],
+            no_viewport   = True,
+        )
+    except Exception as exc:
+        logger.error("לא ניתן לפתוח את חלון הדפדפן: %s", exc)
+        print()
+        print("❌ שגיאה: לא ניתן לפתוח את חלון הדפדפן.")
+        print(f"   Details: {exc}")
+        print("💡 טיפים לפתרון:")
+        print("   1. אם אתה מריץ בסביבה ללא תצוגה גרפית (שרת לינוקס / Docker), בצע התחברות במחשבך האישי והעתק את תיקיית 'sport5_user_data' לכאן.")
+        print("   2. ודא שתיקיית 'sport5_user_data' אינה נעולה על ידי תהליך כרום אחר שרץ ברקע.")
+        print()
+        sys.exit(1)
 
-    print("[login] ממתין לסיום ההתחברות... (הסקריפט יתקדם אוטומטית)")
+    try:
+        page = ctx.new_page()
+        page.goto(BASE_URL, wait_until="domcontentloaded")
 
-    # ── BLOCKS HERE until the browser URL matches **/my-team ─────────────────
-    # timeout=0 means wait forever — no timeout at all.
-    page.wait_for_url("**/my-team", timeout=0)
+        print("[login] ממתין לסיום ההתחברות... (הסקריפט יתקדם אוטומטית)")
+        logger.info("ממתין לסיום ההתחברות...")
 
-    # Give Chromium 2 seconds to flush all session cookies to USER_DATA_DIR
-    time.sleep(2)
-    ctx.close()
+        # ── BLOCKS HERE until the browser URL matches **/my-team ─────────────
+        # timeout=0 means wait forever — no timeout at all.
+        page.wait_for_url("**/my-team", timeout=0)
 
+        # Give Chromium time to flush all session cookies to USER_DATA_DIR
+        time.sleep(_SESSION_FLUSH_SECONDS)
+    finally:
+        ctx.close()
+
+    logger.info("✅ התחברות הצליחה! הסשן נשמר.")
     print()
     print("[login] ✅ התחברות הצליחה! הסשן נשמר.")
     print("[login] ממשיך במצב headless...\n")

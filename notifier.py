@@ -18,6 +18,7 @@ Kept:  build_substitution_alert()  — used by live-loop mode / test_run.py
 """
 
 import json
+import logging
 import os
 from datetime import datetime
 
@@ -28,6 +29,8 @@ from config import (
     ALERT_STATE_FILE,
 )
 from display import format_bidi
+
+logger = logging.getLogger(__name__)
 
 
 # backward-compat alias
@@ -56,7 +59,7 @@ def save_sent_alerts(sent: set) -> None:
         with open(ALERT_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(list(sent), f, ensure_ascii=False, indent=2)
     except Exception as exc:
-        print(f"[notifier] Failed to save alert state: {exc}")
+        logger.error("Failed to save alert state: %s", exc)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -281,10 +284,11 @@ def evaluate_alerts(squads: list[dict], sent_alerts: set) -> list[str]:
     schedule = config.MATCH_SCHEDULE
     first_ko = config.FIRST_KICKOFF_PER_ROUND
 
-    for round_id, first_kickoff in first_ko.items():
-        secs = seconds_until(first_kickoff)
-        for hours, offset in [(3, 10800), (1, 3600)]:
-            key = f"deadline_r{round_id}_{hours}h"
+    for label, offset in sorted(config.ALERT_OFFSETS.items(), key=lambda x: -x[1]):
+        hours = offset // 3600
+        for round_id, first_kickoff in first_ko.items():
+            secs = seconds_until(first_kickoff)
+            key = f"deadline_r{round_id}_{label}"
             if key not in sent_alerts and _within_window(secs, offset):
                 alerts.append(build_substitution_alert(hours))
                 sent_alerts.add(key)

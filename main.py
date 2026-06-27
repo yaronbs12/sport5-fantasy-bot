@@ -13,7 +13,7 @@ Interactive flow:
 
 import sys
 import os
-import re
+import logging
 from datetime import datetime
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -25,8 +25,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from playwright.sync_api import sync_playwright
 
-from config           import SEASON_ID
-from display          import format_bidi
+from config           import SEASON_ID, LEAGUE_BLACKLIST, setup_logging
+from display          import format_bidi, normalize_league_name
 from login            import ensure_authenticated
 from schedule_fetcher import fetch_live_schedule
 from scraper          import (
@@ -36,9 +36,10 @@ from scraper          import (
 )
 from notifier         import build_match_report, now_il
 
+logger = logging.getLogger(__name__)
+
 DIVIDER_HEAVY = "═" * 58
 DIVIDER_LIGHT = "─" * 58
-OUTPUT_DIR    = os.getcwd()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,13 +60,13 @@ def section(title: str) -> None:
 def save_reports(reports: list[str], league_id: str) -> str:
     """Save reports (logical Hebrew, no bidi) to a timestamped text file."""
     ts       = now_il().strftime("%Y%m%d_%H%M%S")
-    filename = os.path.join(OUTPUT_DIR, f"match_reports_{league_id}_{ts}.txt")
+    filename = os.path.join(os.getcwd(), f"match_reports_{league_id}_{ts}.txt")
     try:
         with open(filename, "w", encoding="utf-8") as f:
             f.write("\n\n".join(reports))
         return filename
     except Exception as exc:
-        print(f"  [save] Could not write file: {exc}")
+        logger.error("Could not write file: %s", exc)
         return ""
 
 
@@ -73,19 +74,6 @@ def save_reports(reports: list[str], league_id: str) -> str:
 #  Step 2 — League selection
 # ─────────────────────────────────────────────────────────────────────────────
 
-def normalize_league_name(s: str) -> str:
-    """
-    Normalizes a league name string for robust matching.
-    Strips all spaces and removes/replaces quotes, gershayim, and apostrophes.
-    """
-    if not s:
-        return ""
-    # Strip all whitespace characters
-    s = "".join(s.split())
-    # Remove variations of quotes, gershayim, and apostrophes
-    for char in ('"', "'", '״', '׳', '’'):
-        s = s.replace(char, '')
-    return s.lower()
 
 
 def prompt_league_id(context) -> str:
@@ -164,8 +152,7 @@ def prompt_league_id(context) -> str:
             if matched_lg:
                 resolved_name = matched_lg.get("leagueName") or matched_lg.get("name") or ""
 
-    # ── Guardrail / Blacklist Check ──────────────────────────────────────────
-    LEAGUE_BLACKLIST = ["כף ורדה", "ליגת העל", "כללי", "הכללית", "עולמי"]
+
 
     # Check if attempts to load a known massive global league ID
     is_massive_id = False
@@ -233,6 +220,7 @@ def print_report(report_text: str, match_index: int, total: int) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    setup_logging()
     print()
     print(DIVIDER_HEAVY)
     print("  Sport5 Fantasy Bot — Interactive CLI")

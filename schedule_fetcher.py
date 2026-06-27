@@ -23,48 +23,44 @@ We convert each match to:
   {
     "match_id":    "matchday8_CZE_RSA",
     "round_id":    8,
-    "home_team":   "Czech Republic",
-    "away_team":   "South Africa",
+    "home_team":   "צ'כיה",
+    "away_team":   "דרום אפריקה",
     "kickoff_time": datetime(..., tzinfo=IL_TZ)
   }
 
-Team names are kept in English (as they appear in the API).
-The nation matching in notifier.py compares against the Sport5 team names,
-so a TEAM_NAME_MAP below translates to the Hebrew names used in Sport5.
+Team names are translated to the canonical Hebrew names used by Sport5,
+as defined in TEAM_NAME_MAP below. All values MUST match the output of
+normalize_country_name() in scraper.py exactly.
 """
 
 import re
-import urllib.request
 import json
-import ssl
+import logging
+import requests
 from datetime import datetime, timezone, timedelta
 
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    from backports.zoneinfo import ZoneInfo
+from config import IL_TZ
 
-IL_TZ = ZoneInfo("Asia/Jerusalem")
+logger = logging.getLogger(__name__)
 
 OPENFOOTBALL_URL = (
     "https://raw.githubusercontent.com/openfootball/"
     "worldcup.json/master/2026/worldcup.json"
 )
 
-# Cache TTL in seconds – refresh schedule every 6 hours
-SCHEDULE_CACHE_TTL = 6 * 3600
-
 # ─────────────────────────────────────────────────────────────────────────────
-#  English → Hebrew team name map  (Sport5 uses Hebrew names)
+#  English → Hebrew team name map
+#  All values MUST match the canonical outputs of normalize_country_name()
+#  in scraper.py (i.e., what Sport5 returns after normalization).
 #  Add / fix any entries that don't match your Sport5 roster data.
 # ─────────────────────────────────────────────────────────────────────────────
 TEAM_NAME_MAP = {
     "Mexico":               "מקסיקו",
     "South Africa":         "דרום אפריקה",
-    "South Korea":          "קוריאה הדרומית",
+    "South Korea":          "דרום קוריאה",
     "Czech Republic":       "צ'כיה",
     "Canada":               "קנדה",
-    "Bosnia & Herzegovina": "בוסניה",
+    "Bosnia & Herzegovina": "בוסניה והרצגובינה",
     "Qatar":                "קטאר",
     "Switzerland":          "שווייץ",
     "Brazil":               "ברזיל",
@@ -84,7 +80,7 @@ TEAM_NAME_MAP = {
     "Netherlands":          "הולנד",
     "Colombia":             "קולומביה",
     "Uzbekistan":           "אוזבקיסטן",
-    "Ecuador":              "אקוודור",
+    "Ecuador":              "אקוואדור",
     "Uruguay":              "אורוגוואי",
     "Italy":                "איטליה",
     "Belgium":              "בלגיה",
@@ -130,7 +126,7 @@ TEAM_NAME_MAP = {
     "Sweden":               "שוודיה",
     "Ivory Coast":          "חוף השנהב",
     "Mali":                 "מאלי",
-    "Congo DR":             "קונגו",
+    "Congo DR":             "הרפובליקה הדמוקרטית של קונגו",
     "Angola":               "אנגולה",
     "Tanzania":             "טנזניה",
 }
@@ -146,17 +142,15 @@ def _parse_kickoff_utc(date_str: str, time_str: str) -> datetime | None:
     Returns None on failure.
     """
     try:
-        # Extract hour/minute and UTC offset from time string
         m = re.match(r"(\d{1,2}):(\d{2})\s+UTC([+-]\d+)", time_str)
         if not m:
             return None
-        hour    = int(m.group(1))
-        minute  = int(m.group(2))
-        offset  = int(m.group(3))          # e.g. -6
+        hour   = int(m.group(1))
+        minute = int(m.group(2))
+        offset = int(m.group(3))
 
-        # Build naive local datetime then shift to UTC
-        local_tz  = timezone(timedelta(hours=offset))
-        local_dt  = datetime(
+        local_tz = timezone(timedelta(hours=offset))
+        local_dt = datetime(
             *[int(x) for x in date_str.split("-")],
             hour, minute,
             tzinfo=local_tz,
@@ -196,19 +190,17 @@ def fetch_live_schedule(only_future: bool = True) -> list[dict]:
     ----------
     only_future : if True, skips matches whose kickoff is already in the past.
     """
-    print("[schedule] Fetching live World Cup schedule from openfootball...")
-
-    # Disable SSL verification for environments with cert issues
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode    = ssl.CERT_NONE
+    logger.info("Fetching live World Cup schedule from openfootball...")
 
     try:
-        req  = urllib.request.urlopen(OPENFOOTBALL_URL, context=ctx, timeout=15)
-        raw  = req.read().decode("utf-8")
-        data = json.loads(raw)
-    except Exception as exc:
-        print(f"[schedule] ⚠️  Failed to fetch schedule: {exc}")
+        response = requests.get(OPENFOOTBALL_URL, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        logger.error("Failed to fetch schedule: %s", exc)
+        return []
+    except ValueError as exc:
+        logger.error("Failed to parse schedule JSON: %s", exc)
         return []
 
     matches_raw = data.get("matches", [])
@@ -227,11 +219,11 @@ def fetch_live_schedule(only_future: bool = True) -> list[dict]:
             continue
 
         if only_future and utc_kickoff <= now_utc:
-            continue   # skip past matches
+            continue
 
         il_kickoff = _to_il(utc_kickoff)
 
-        # Translate to Hebrew (fall back to English if not in map)
+        # Translate to canonical Hebrew names (must match Sport5 / normalize_country_name output)
         home_heb = TEAM_NAME_MAP.get(team1_en, team1_en)
         away_heb = TEAM_NAME_MAP.get(team2_en, team2_en)
 
@@ -240,20 +232,18 @@ def fetch_live_schedule(only_future: bool = True) -> list[dict]:
             "round_id":    _round_number(round_str),
             "home_team":   home_heb,
             "away_team":   away_heb,
-            "home_team_en": team1_en,
-            "away_team_en": team2_en,
             "kickoff_time": il_kickoff,
             "kickoff_utc":  utc_kickoff,
             "ground":       match.get("ground", ""),
         })
 
     schedule.sort(key=lambda x: x["kickoff_time"])
-    print(f"[schedule] ✅ Loaded {len(schedule)} upcoming matches.")
+    logger.info("Loaded %d upcoming matches.", len(schedule))
     return schedule
 
 
 def print_upcoming(schedule: list[dict], n: int = 10) -> None:
-    """Pretty-print the next N matches (for debugging)."""
+    """Pretty-print the next N matches (for debugging / self-test)."""
     print(f"\n{'─'*60}")
     print(f"  Next {min(n, len(schedule))} upcoming World Cup matches (Israel time):")
     print(f"{'─'*60}")
@@ -267,5 +257,7 @@ def print_upcoming(schedule: list[dict], n: int = 10) -> None:
 #  Quick self-test when run directly
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    import logging as _logging
+    _logging.basicConfig(level=_logging.INFO, format="%(levelname)s: %(message)s")
     sched = fetch_live_schedule(only_future=False)
     print_upcoming(sched, n=20)
