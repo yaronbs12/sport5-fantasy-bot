@@ -171,8 +171,7 @@ def build_match_report(
     # Ordered dicts preserve insertion order (member with first player encountered first)
     starters_by_member: dict[str, list[dict]] = {}
     bench_by_member:    dict[str, list[dict]] = {}
-    captain_member: str | None = None
-    captain_player: str | None = None
+    captains: list[tuple[str, str]] = []
 
     for squad in squads:
         m_name = squad["user_name"]
@@ -183,9 +182,8 @@ def build_match_report(
                 bench_by_member.setdefault(m_name, []).append(p)
             else:
                 starters_by_member.setdefault(m_name, []).append(p)
-                if p["role"] == "captain" and captain_member is None:
-                    captain_member = m_name
-                    captain_player = p["name"]
+                if p["role"] == "captain":
+                    captains.append((m_name, p["name"]))
 
     # ── Build raw lines (logical Hebrew order) ────────────────────────────────
     raw_lines: list[str] = [
@@ -217,8 +215,13 @@ def build_match_report(
     else:
         raw_lines.append("• אין שחקנים למשחק זה")
 
-    if captain_member and captain_player:
-        raw_lines.extend(["", f"👑 קפטן פעיל במשחק: {captain_member} ({captain_player})"])
+    if captains:
+        if len(captains) == 1:
+            m_name, p_name = captains[0]
+            raw_lines.extend(["", f"👑 קפטן פעיל במשחק: {m_name} ({p_name})"])
+        else:
+            cap_str = ", ".join(f"{m_name} ({p_name})" for m_name, p_name in captains)
+            raw_lines.extend(["", f"👑 קפטנים פעילים במשחק: {cap_str}"])
 
     # ── Apply bidi per-line ───────────────────────────────────────────────────
     if apply_bidi:
