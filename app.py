@@ -1173,13 +1173,11 @@ function copyText_{i}() {{
     const text = {escaped_report};
     const btn = document.getElementById('copy-btn-{i}');
     const orig = btn.innerHTML;
-    
     function success() {{
         btn.innerHTML = '<span>✓</span> הועתק!';
         btn.style.backgroundColor = '#10b981';
         setTimeout(() => {{ btn.innerHTML = orig; btn.style.backgroundColor = '#ef4444'; }}, 2000);
     }}
-    
     function fallback() {{
         const ta = document.createElement('textarea');
         ta.value = text;
@@ -1195,7 +1193,6 @@ function copyText_{i}() {{
         }}
         document.body.removeChild(ta);
     }}
-    
     if (navigator.clipboard && navigator.clipboard.writeText) {{
         navigator.clipboard.writeText(text).then(success).catch(fallback);
     }} else {{
@@ -1203,7 +1200,7 @@ function copyText_{i}() {{
     }}
 }}
 </script>"""
-                st.markdown(action_buttons_html, unsafe_allow_html=True)
+                st.html(action_buttons_html)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 with st.expander("📋 הצג טקסט גולמי (לגיבוי)"):
