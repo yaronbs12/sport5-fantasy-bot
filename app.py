@@ -1161,52 +1161,13 @@ def main():
                 
                 st.markdown('<div class="fantasy-card" style="direction: rtl; text-align: right; color: var(--text-color);">\n\n' + report_markdown + '\n\n</div>', unsafe_allow_html=True)
                 
-                safe_report_text = json.dumps(report_markdown)
                 encoded_report = urllib.parse.quote(report_markdown)
                 whatsapp_url = f"https://api.whatsapp.com/send?text={encoded_report}"
                 
                 action_buttons_html = f"""<div style="display: flex; gap: 12px; width: 100%; direction: rtl; margin-top: 10px;">
+    <div style="flex: 1; height: 42px; background-color: #ef4444; color: white; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif; user-select: none;" title="השתמש בתיבת הגיבוי למטה להעתקה">📋 העתק דוח ללוח</div>
     <a href="{whatsapp_url}" target="_blank" style="flex: 1; height: 42px; background-color: #25D366; color: white; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.25); font-size: 14.5px; font-family: 'Rubik', sans-serif;">💬 שתף בוואטסאפ</a>
-    <button id="copy-btn-{i}" onclick="copyToClipboard_{i}(this)" style="flex: 1; height: 42px; background-color: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif;">📋 העתק דוח ללוח</button>
-</div>
-<script>
-function copyToClipboard_{i}(btn) {{
-    const textToCopy = {safe_report_text};
-    if (navigator.clipboard && window.isSecureContext) {{
-        navigator.clipboard.writeText(textToCopy).then(() => {{
-            updateButtonSuccess_{i}(btn);
-        }}).catch(err => {{
-            fallbackCopy_{i}(textToCopy, btn);
-        }});
-    }} else {{
-        fallbackCopy_{i}(textToCopy, btn);
-    }}
-}}
-function fallbackCopy_{i}(text, btn) {{
-    const textArea = document.createElement("textarea");
-    textArea.value = text;
-    textArea.style.position = "fixed";
-    textArea.style.left = "-9999px";
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {{
-        document.execCommand('copy');
-        updateButtonSuccess_{i}(btn);
-    }} catch (err) {{
-        console.error('Fallback copy failed', err);
-    }}
-    document.body.removeChild(textArea);
-}}
-function updateButtonSuccess_{i}(btn) {{
-    const orig = btn.innerHTML;
-    btn.innerHTML = '<span>✓</span> הועתק!';
-    btn.style.backgroundColor = '#10b981';
-    setTimeout(() => {{
-        btn.innerHTML = orig;
-        btn.style.backgroundColor = '#ef4444';
-    }}, 2000);
-}}
-</script>"""
+</div>"""
                 st.markdown(action_buttons_html, unsafe_allow_html=True)
                 
                 st.markdown("<br>", unsafe_allow_html=True)
