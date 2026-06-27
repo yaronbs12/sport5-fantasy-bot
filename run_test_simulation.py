@@ -1,6 +1,6 @@
 """
-test_run.py
------------
+run_test_simulation.py
+----------------------
 Standalone integration test for the Sport5 Fantasy Bot.
 
 ► Does NOT require Playwright or a live Sport5 session.
@@ -11,7 +11,7 @@ Standalone integration test for the Sport5 Fantasy Bot.
   all Hebrew texts, captain labels, and timing logic are correct.
 
 Run with:
-    python test_run.py
+    python run_test_simulation.py
 """
 
 import os
@@ -160,84 +160,85 @@ def emit(text: str) -> None:
 #  1. Timezone sanity check
 # ─────────────────────────────────────────────────────────────────────────────
 
-print_section("✔ PHASE 1 – Israel Timezone Sanity Check")
+if __name__ == "__main__":
+    print_section("✔ PHASE 1 – Israel Timezone Sanity Check")
 
-now    = _now()
-offset = now.utcoffset()
-print(f"  Current Israel time : {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-print(f"  UTC offset          : {offset}")
-print(f"  Expected offset     : +02:00 (winter) or +03:00 (summer/DST)")
+    now    = _now()
+    offset = now.utcoffset()
+    print(f"  Current Israel time : {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    print(f"  UTC offset          : {offset}")
+    print(f"  Expected offset     : +02:00 (winter) or +03:00 (summer/DST)")
 
-t1_delta = int((_t1h - now).total_seconds() / 60)
-t3_delta = int((_t3h - now).total_seconds() / 60)
-print(f"  Test match 1 in     : ~{t1_delta} minutes  → will trigger 1h alerts")
-print(f"  Test match 3 in     : ~{t3_delta} minutes  → will trigger 3h deadline alert")
+    t1_delta = int((_t1h - now).total_seconds() / 60)
+    t3_delta = int((_t3h - now).total_seconds() / 60)
+    print(f"  Test match 1 in     : ~{t1_delta} minutes  → will trigger 1h alerts")
+    print(f"  Test match 3 in     : ~{t3_delta} minutes  → will trigger 3h deadline alert")
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  2. Text builder unit tests (independent of timing)
-# ─────────────────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────────
+    #  2. Text builder unit tests (independent of timing)
+    # ─────────────────────────────────────────────────────────────────────────────
 
-print_section("✔ PHASE 2 – Hebrew Text Builder Unit Tests")
+    print_section("✔ PHASE 2 – Hebrew Text Builder Unit Tests")
 
-print("\n[Alert 1 – 3h deadline]")
-emit(build_substitution_alert(3))
+    print("\n[Alert 1 – 3h deadline]")
+    emit(build_substitution_alert(3))
 
-print("\n[Alert 1 – 1h deadline]")
-emit(build_substitution_alert(1))
+    print("\n[Alert 1 – 1h deadline]")
+    emit(build_substitution_alert(1))
 
-print("\n[Alert 2 – גרמניה preview]")
-emit(build_match_preview_alert("גרמניה", "סקוטלנד", _KICKOFF_TEST, MOCK_SQUADS))
+    print("\n[Alert 2 – גרמניה preview]")
+    emit(build_match_preview_alert("גרמניה", "סקוטלנד", _KICKOFF_TEST, MOCK_SQUADS))
 
-print("\n[Alert 2 – ארגנטינה preview]")
-emit(build_match_preview_alert("ארגנטינה", "מקסיקו", _KICKOFF_TEST, MOCK_SQUADS))
+    print("\n[Alert 2 – ארגנטינה preview]")
+    emit(build_match_preview_alert("ארגנטינה", "מקסיקו", _KICKOFF_TEST, MOCK_SQUADS))
 
-print("\n[Alert 2 – נבחרת ללא שחקנים בליגה (סקוטלנד)]")
-emit(build_match_preview_alert("סקוטלנד", "גרמניה", _KICKOFF_TEST, MOCK_SQUADS))
+    print("\n[Alert 2 – נבחרת ללא שחקנים בליגה (סקוטלנד)]")
+    emit(build_match_preview_alert("סקוטלנד", "גרמניה", _KICKOFF_TEST, MOCK_SQUADS))
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  3. Full evaluate_alerts() integration test
-# ─────────────────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────────
+    #  3. Full evaluate_alerts() integration test
+    # ─────────────────────────────────────────────────────────────────────────────
 
-print_section("✔ PHASE 3 – Full evaluate_alerts() Integration Test")
+    print_section("✔ PHASE 3 – Full evaluate_alerts() Integration Test")
 
-# Clear alert state so nothing is "already sent"
-state_file = _cfg.ALERT_STATE_FILE
-if os.path.exists(state_file):
-    backup = state_file + ".bak"
-    shutil.copy(state_file, backup)
-    os.remove(state_file)
-    print(f"  (Backed up existing alert_state.json → {backup})")
+    # Clear alert state so nothing is "already sent"
+    state_file = _cfg.ALERT_STATE_FILE
+    if os.path.exists(state_file):
+        backup = state_file + ".bak"
+        shutil.copy(state_file, backup)
+        os.remove(state_file)
+        print(f"  (Backed up existing alert_state.json → {backup})")
 
-sent = set()
-alerts = evaluate_alerts(MOCK_SQUADS, sent)
+    sent = set()
+    alerts = evaluate_alerts(MOCK_SQUADS, sent)
 
-print(f"\n  Alerts triggered    : {len(alerts)}")
-print(f"  Alert keys in state : {sorted(sent)}\n")
+    print(f"\n  Alerts triggered    : {len(alerts)}")
+    print(f"  Alert keys in state : {sorted(sent)}\n")
 
-if alerts:
-    for i, a in enumerate(alerts, 1):
-        print(f"  ── Alert #{i} ──")
-        emit(a)
-else:
-    print("  ⚠️  No alerts fired. Check timing offsets or ALERT_WINDOW_SECONDS.")
+    if alerts:
+        for i, a in enumerate(alerts, 1):
+            print(f"  ── Alert #{i} ──")
+            emit(a)
+    else:
+        print("  ⚠️  No alerts fired. Check timing offsets or ALERT_WINDOW_SECONDS.")
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  4. De-duplication test
-# ─────────────────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────────
+    #  4. De-duplication test
+    # ─────────────────────────────────────────────────────────────────────────────
 
-print_section("✔ PHASE 4 – De-duplication (no double alerts)")
+    print_section("✔ PHASE 4 – De-duplication (no double alerts)")
 
-alerts_again = evaluate_alerts(MOCK_SQUADS, sent)
-if len(alerts_again) == 0:
-    print("  ✅ PASS – evaluate_alerts() returned 0 alerts on second call (already sent).")
-else:
-    print(f"  ❌ FAIL – {len(alerts_again)} alert(s) fired again!")
-    for a in alerts_again:
-        print(a)
+    alerts_again = evaluate_alerts(MOCK_SQUADS, sent)
+    if len(alerts_again) == 0:
+        print("  ✅ PASS – evaluate_alerts() returned 0 alerts on second call (already sent).")
+    else:
+        print(f"  ❌ FAIL – {len(alerts_again)} alert(s) fired again!")
+        for a in alerts_again:
+            print(a)
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Done
-# ─────────────────────────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────────
+    #  Done
+    # ─────────────────────────────────────────────────────────────────────────────
 
-print_section("✔ ALL TESTS COMPLETE")
-print("  Run  python main.py  to start the live monitoring loop.\n")
+    print_section("✔ ALL TESTS COMPLETE")
+    print("  Run  python main.py  to start the live monitoring loop.\n")

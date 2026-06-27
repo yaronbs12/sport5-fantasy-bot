@@ -46,10 +46,13 @@ Built to pull, compile, normalize, and report on competitor rosters across an en
 ## 📸 Screenshots
 
 ### 📊 Analytics Dashboard
-![Analytics Dashboard](screenshots/dashboard.png)
+![Analytics Dashboard](screenshots/Dashboard.png)
 
 ### ⚽ Live Match Report & WhatsApp Share
-![Live Match Report](screenshots/match_report.png)
+![Live Match Report](screenshots/Match%20Report.png)
+
+### 👥 Squads Comparison
+![Squads Comparison](screenshots/Players%20compare.png)
 
 ---
 
