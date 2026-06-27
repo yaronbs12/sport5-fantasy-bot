@@ -15,7 +15,7 @@ from playwright.sync_api import sync_playwright
 
 from config import SEASON_ID, USER_DATA_DIR, LEAGUE_BLACKLIST, IL_TZ, BASE_URL
 from display import format_bidi, normalize_league_name
-from login import ensure_authenticated, is_authenticated
+from login import is_authenticated
 from schedule_fetcher import fetch_live_schedule
 from scraper import (
     create_browser_context,
@@ -1166,12 +1166,13 @@ def main():
                 
                 action_buttons_html = f"""<div style="display: flex; gap: 12px; width: 100%; direction: rtl;">
 <a href="{whatsapp_url}" target="_blank" style="flex: 1; height: 42px; background-color: #25D366; color: white; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-weight: 600; box-shadow: 0 4px 10px rgba(37, 211, 102, 0.25); font-size: 14.5px; font-family: 'Rubik', sans-serif;">💬 שתף בוואטסאפ</a>
-<button id="copy-btn-{i}" onclick="copyText_{i}()" style="flex: 1; height: 42px; background-color: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif;">📋 העתק דוח ללוח</button>
+<button id="copy-btn-{i}" style="flex: 1; height: 42px; background-color: #ef4444; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25); display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-family: 'Rubik', sans-serif;">📋 העתק דוח ללוח</button>
 </div>
 <script>
-function copyText_{i}() {{
+(function() {{
     const text = {escaped_report};
     const btn = document.getElementById('copy-btn-{i}');
+    if (!btn) return;
     const orig = btn.innerHTML;
     function success() {{
         btn.innerHTML = '<span>✓</span> הועתק!';
@@ -1193,12 +1194,14 @@ function copyText_{i}() {{
         }}
         document.body.removeChild(ta);
     }}
-    if (navigator.clipboard && navigator.clipboard.writeText) {{
-        navigator.clipboard.writeText(text).then(success).catch(fallback);
-    }} else {{
-        fallback();
-    }}
-}}
+    btn.addEventListener('click', () => {{
+        if (navigator.clipboard && navigator.clipboard.writeText) {{
+            navigator.clipboard.writeText(text).then(success).catch(fallback);
+        }} else {{
+            fallback();
+        }}
+    }});
+}})();
 </script>"""
                 st.html(action_buttons_html)
                 
