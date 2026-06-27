@@ -246,9 +246,6 @@ def fetch_league_users(context: BrowserContext, league_id: str) -> list[dict]:
                 })
 
     logger.debug("Found %d league members for league %s.", len(members), league_id)
-    MOCK_MAP = {"ירוניניו": "יוסי התותח", "רון מוריניאו": "דני הגאון", "Ofriki": "רון המלך", "עילם": "בני גווארידולה", "גיל שקותאי": "עמית חנגל"}
-    for m in members:
-        m["user_name"] = MOCK_MAP.get(m["user_name"], m["user_name"])
     return members
 
 
